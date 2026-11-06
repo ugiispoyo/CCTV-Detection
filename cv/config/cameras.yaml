@@ -1,0 +1,23 @@
+cameras:
+  # Verified against the physical Lens 1 feed on 2026-11-06.
+  - camera_id: cam-001-lens-1
+    physical_camera_id: h9c-001
+    name: EZVIZ H9c - Lens 1
+    lens_name: Lens 1
+    enabled: true
+    rtsp_url_env: H9C_LENS_1_RTSP_URL
+    counting:
+      line: { x1: 0.10, y1: 0.60, x2: 0.90, y2: 0.60 }
+      direction_in: negative_to_positive
+
+  # Preserve the existing camera ID and its history for the verified channel 201 stream.
+  - camera_id: cam-001
+    physical_camera_id: h9c-001
+    name: EZVIZ H9c - Lens 2
+    lens_name: Lens 2
+    enabled: true
+    rtsp_url_env: H9C_LENS_2_RTSP_URL
+    counting:
+      line: { x1: 0.10, y1: 0.60, x2: 0.90, y2: 0.60 }
+      direction_in: negative_to_positive
+

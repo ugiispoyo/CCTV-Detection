@@ -1,0 +1,22 @@
+{
+  "name": "cctv-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CCTV AI monitoring monorepo",
+  "engines": {
+    "node": ">=24.11.0 <25"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run build -w @cctv-ai/shared && npm run dev -w @cctv-ai/api",
+    "dev:dashboard": "npm run build -w @cctv-ai/shared && npm run dev -w @cctv-ai/dashboard",
+    "build:shared": "npm run build -w @cctv-ai/shared",
+    "build:api": "npm run build:shared && npm run build -w @cctv-ai/api",
+    "build:dashboard": "npm run build:shared && npm run build -w @cctv-ai/dashboard",
+    "build": "npm run build:shared && npm run build -w @cctv-ai/api && npm run build -w @cctv-ai/dashboard",
+    "typecheck": "npm run build:shared && npm run typecheck -w @cctv-ai/api && npm run typecheck -w @cctv-ai/dashboard"
+  }
+}
