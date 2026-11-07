@@ -15,7 +15,7 @@ Both configured channel mappings were verified against real frames on 2026-11-06
 
 Each runtime owns its capture, Detector/ByteTrack state, session ID, line counter, heartbeat, metrics, and preview publisher. YOLO inference calls are serialized across cameras because concurrent access to Apple MPS and persistent Ultralytics tracker state is unsafe. Each logical camera has its own model/tracker instance; nano-model memory is traded for correct tracker isolation.
 
-Wide and telephoto lenses may produce very different person box sizes. Optional per-camera `person_capture.min_confidence`, `min_width`, and `min_height` values adjust only best-frame candidate eligibility. They do not change line-crossing authority or vehicle counting. Lens 1 currently uses reviewed wide-view thresholds while Lens 2 retains the global defaults.
+Wide and telephoto lenses may produce very different person box sizes. Optional per-camera `person_capture.min_confidence`, `min_width`, and `min_height` values adjust only best-frame candidate eligibility. They do not change line-crossing authority or vehicle counting. Both H9c lenses currently use a 960-pixel single-pass inference size and accept the same confidence floor as the realtime detector so smaller child/person boxes can enter the bounded candidate buffer; a confirmed line crossing remains mandatory before any capture is created.
 
 ```mermaid
 flowchart LR

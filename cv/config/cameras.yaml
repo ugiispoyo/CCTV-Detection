@@ -6,16 +6,21 @@ cameras:
     lens_name: Lens 1
     enabled: true
     rtsp_url_env: H9C_LENS_1_RTSP_URL
+    # Higher single-pass inference resolution improves small/child person boxes
+    # without adding a second detector or RTSP reader.
+    image_size: 960
     counting:
       line_id: entry-line
       line: { x1: 0.10, y1: 0.60, x2: 0.90, y2: 0.60 }
       direction_in: negative_to_positive
-    # Lens 1 is a wide view: people are materially smaller and lower-confidence
-    # than Lens 2, while line crossing remains the authoritative trigger.
+    # A box already accepted by the realtime detector must remain eligible for
+    # the bounded best-frame buffer. The line crossing is still the only event
+    # that finalizes a capture, so relaxed crop eligibility does not create
+    # ordinary in-frame labeling records.
     person_capture:
-      min_confidence: 0.50
-      min_width: 40
-      min_height: 70
+      min_confidence: 0.25
+      min_width: 16
+      min_height: 32
 
   # Preserve the existing camera ID and its history for the verified channel 201 stream.
   - camera_id: cam-001
@@ -24,8 +29,13 @@ cameras:
     lens_name: Lens 2
     enabled: true
     rtsp_url_env: H9C_LENS_2_RTSP_URL
+    image_size: 960
     counting:
       line_id: entry-line
       line: { x1: 0.10, y1: 0.60, x2: 0.90, y2: 0.60 }
       direction_in: negative_to_positive
+    person_capture:
+      min_confidence: 0.25
+      min_width: 16
+      min_height: 32
 

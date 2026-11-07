@@ -33,6 +33,11 @@ class Candidate:
 class CandidateSet:
     candidates: list[Candidate]
     last_seen: float
+    last_confidence: float = 0.0
+    last_width: float = 0.0
+    last_height: float = 0.0
+    last_visible_ratio: float | None = None
+    last_rejection: str = "not_observed"
 
 
 class PersonCaptureManager:
@@ -87,15 +92,27 @@ class PersonCaptureManager:
             x1, y1, x2, y2 = track.bbox
             candidate_set = self._pending.setdefault(track.track_id, CandidateSet([], now))
             candidate_set.last_seen = now
+            candidate_set.last_confidence = track.confidence
+            candidate_set.last_width = x2 - x1
+            candidate_set.last_height = y2 - y1
+            candidate_set.last_visible_ratio = None
             candidate_set.candidates = [item for item in candidate_set.candidates if now - item.observed_at <= self._buffer_seconds]
-            if track.confidence < self._min_confidence or x2 - x1 < self._min_width or y2 - y1 < self._min_height:
+            if track.confidence < self._min_confidence:
+                candidate_set.last_rejection = "confidence"
+                continue
+            if x2 - x1 < self._min_width or y2 - y1 < self._min_height:
+                candidate_set.last_rejection = "dimensions"
                 continue
             result = crop_person(frame, track.bbox, self._padding)
             if result is None:
+                candidate_set.last_rejection = "invalid_crop"
                 continue
             crop, visible_ratio = result
+            candidate_set.last_visible_ratio = visible_ratio
             if visible_ratio < 0.70:
+                candidate_set.last_rejection = "clipped"
                 continue
+            candidate_set.last_rejection = ""
             candidate_set.candidates.append(Candidate(
                 crop, track.confidence, quality_score(crop, visible_ratio, frame.shape),
                 datetime.now(timezone.utc), now,
@@ -119,7 +136,18 @@ class PersonCaptureManager:
             return
         candidate_set = self._pending.get(track_id)
         if not candidate_set or not candidate_set.candidates or crossing.eventId in self._finalized:
-            LOGGER.warning("Crossing capture unavailable camera_id=%s track_id=%d reason=no_valid_candidate", self._camera_id, track_id)
+            LOGGER.warning(
+                "Crossing capture unavailable camera_id=%s track_id=%d reason=no_valid_candidate "
+                "last_rejection=%s confidence=%.3f bbox=%.1fx%.1f visible_ratio=%s "
+                "minimums=%.2f/%dx%d",
+                self._camera_id, track_id,
+                candidate_set.last_rejection if candidate_set else "track_not_buffered",
+                candidate_set.last_confidence if candidate_set else 0.0,
+                candidate_set.last_width if candidate_set else 0.0,
+                candidate_set.last_height if candidate_set else 0.0,
+                f"{candidate_set.last_visible_ratio:.3f}" if candidate_set and candidate_set.last_visible_ratio is not None else "n/a",
+                self._min_confidence, self._min_width, self._min_height,
+            )
             self._crossings.pop(track_id, None)
             self._remember_finalized(crossing.eventId)
             return
