@@ -28,7 +28,8 @@ class CountingManager:
         session_id: str,
     ) -> list[DetectionEventPayload]:
         events: list[DetectionEventPayload] = []
-        for crossing in self.line_counter.update(tracks, frame_shape):
+        countable_tracks = [track for track in tracks if track.object_type in {"person", "car", "motorcycle"}]
+        for crossing in self.line_counter.update(countable_tracks, frame_shape):
             event = DetectionEventPayload(
                 eventId=str(uuid.uuid4()),
                 cameraId=self._camera_id,

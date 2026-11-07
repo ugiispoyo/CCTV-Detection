@@ -13,7 +13,7 @@ from src.preview.publisher import PreviewPublisher
 from src.preview.renderer import PreviewRenderer
 from src.person_capture.capture_manager import PersonCaptureManager
 from src.queue.event_queue import EventQueue
-from src.tracking.tracker import ByteTrackTracker
+from src.tracking.tracker import ByteTrackTracker, HybridByteTrackTracker
 
 LOGGER = logging.getLogger(__name__)
 class CameraWorker:
@@ -21,7 +21,7 @@ class CameraWorker:
         self,
         camera_id: str,
         capture: RTSPCapture,
-        tracker: ByteTrackTracker,
+        tracker: ByteTrackTracker | HybridByteTrackTracker,
         counting: CountingManager,
         event_queue: EventQueue,
         metrics: RuntimeMetrics,
@@ -138,7 +138,7 @@ class CameraWorker:
                                     min(max(track.bbox[2] / latest.image.shape[1], 0), 1),
                                     min(max(track.bbox[3] / latest.image.shape[0], 0), 1),
                                 ],
-                            } for track in tracks], self._tracker.session_id)
+                            } for track in tracks if track.object_type in {"person", "car", "motorcycle"}], self._tracker.session_id)
                 except Exception:
                     LOGGER.exception("Live preview rendering failed camera_id=%s", self._camera_id)
 

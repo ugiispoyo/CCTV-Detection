@@ -29,7 +29,7 @@ from src.queue.event_queue import EventQueue
 from src.queue.event_sender import EventSender
 from src.queue.snapshot_queue import SnapshotQueue
 from src.queue.snapshot_sender import SnapshotSender
-from src.tracking.tracker import ByteTrackTracker
+from src.tracking.tracker import ByteTrackTracker, HybridByteTrackTracker
 from src.utils.logger import configure_logging, sanitize_error
 
 LOGGER = logging.getLogger(__name__)
@@ -40,13 +40,23 @@ def _print_summary(settings: Settings, cameras: list[CameraRuntimeConfig], devic
         f"  - {camera.camera_id}: {camera.name}"
         for camera in cameras
     )
+    if settings.EXPERIMENTAL_HYBRID_DETECTOR_ENABLED:
+        custom_path = settings.custom_detector_model_path
+        model_summary = (
+            f"custom={custom_path.name if custom_path else 'unavailable'} "
+            f"(person, head, motorcycle); legacy={settings.model_path.name} (car)"
+        )
+        object_summary = "person, head, motorcycle, car"
+    else:
+        model_summary = settings.model_path.name
+        object_summary = ", ".join(OBJECT_CLASSES.values())
     print(
         "\nCCTV AI — CV SERVICE\n\n"
         f"Cameras         : {len(cameras)}\n{camera_lines}\n"
         f"Worker ID       : {settings.WORKER_ID}\n"
-        f"Model           : {settings.model_path.name}\n"
+        f"Model           : {model_summary}\n"
         f"Device          : {device}\n"
-        f"Object Classes  : {', '.join(OBJECT_CLASSES.values())}\n"
+        f"Object Classes  : {object_summary}\n"
         f"API             : {settings.api_base_url}\n"
         f"Runtime         : headless\n"
         f"Dashboard preview: {'enabled' if settings.LIVE_PREVIEW_ENABLED else 'disabled'}\n\n"
@@ -112,7 +122,14 @@ def run() -> int:
                     sanitize_error(exc),
                 )
 
-            detector = Detector(settings.model_path, settings.DEVICE)
+            custom_classes = {0: "person", 1: "head", 2: "motorcycle"}
+            if settings.EXPERIMENTAL_HYBRID_DETECTOR_ENABLED:
+                custom_path = settings.custom_detector_model_path
+                if custom_path is None:
+                    raise RuntimeError("Hybrid custom detector path is unavailable")
+                detector = Detector(custom_path, settings.DEVICE, custom_classes)
+            else:
+                detector = Detector(settings.model_path, settings.DEVICE)
             selected_device = detector.device
             if head_detector is None:
                 head_detector = HeadDetector(
@@ -121,13 +138,25 @@ def run() -> int:
                     selected_device,
                     settings.HEAD_DETECTION_ALLOW_OPENCV_FALLBACK,
                 )
-            tracker = ByteTrackTracker(
+            primary_tracker = ByteTrackTracker(
                 detector,
                 settings.CONFIDENCE_THRESHOLD,
                 settings.IOU_THRESHOLD,
                 camera.image_size,
                 inference_lock,
             )
+            if settings.EXPERIMENTAL_HYBRID_DETECTOR_ENABLED:
+                car_detector = Detector(settings.model_path, settings.DEVICE, {2: "car"})
+                car_tracker = ByteTrackTracker(
+                    car_detector,
+                    settings.CONFIDENCE_THRESHOLD,
+                    settings.IOU_THRESHOLD,
+                    camera.image_size,
+                    inference_lock,
+                )
+                tracker: ByteTrackTracker | HybridByteTrackTracker = HybridByteTrackTracker(primary_tracker, car_tracker)
+            else:
+                tracker = primary_tracker
             line_counter = LineCounter(
                 camera.line,
                 camera.margin_pixels,

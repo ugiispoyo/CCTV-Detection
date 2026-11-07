@@ -37,8 +37,10 @@ def select_device(requested: str) -> str:
 
 
 class Detector:
-    def __init__(self, model_path: Path, requested_device: str) -> None:
+    def __init__(self, model_path: Path, requested_device: str,
+                 object_classes: dict[int, str] | None = None) -> None:
         self.device = select_device(requested_device)
+        self.object_classes = object_classes or OBJECT_CLASSES
         model_path.parent.mkdir(parents=True, exist_ok=True)
         if model_path.exists():
             LOGGER.info("Loading cached YOLO model path=%s", model_path)
@@ -52,9 +54,9 @@ class Detector:
 
     def _validate_classes(self) -> None:
         names = self.model.names
-        for class_id, expected in OBJECT_CLASSES.items():
+        for class_id, expected in self.object_classes.items():
             actual = names.get(class_id) if isinstance(names, dict) else names[class_id]
             if str(actual).lower() != expected:
                 raise RuntimeError(
-                    f"Model class {class_id} is {actual!r}; expected COCO class {expected!r}"
+                    f"Model class {class_id} is {actual!r}; expected configured class {expected!r}"
                 )

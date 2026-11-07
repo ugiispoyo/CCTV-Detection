@@ -12,20 +12,21 @@ from ultralytics import YOLO
 EXPECTED_NAMES = {0: "person", 1: "head", 2: "car", 3: "motorcycle"}
 
 
-def validate_dataset(root: Path) -> Path:
+def validate_dataset(root: Path, expected_names: dict[int, str] | None = None) -> Path:
+    expected_names = expected_names or EXPECTED_NAMES
     metadata_path, yaml_path = root / "metadata.json", root / "data.yaml"
     if not metadata_path.is_file() or not yaml_path.is_file():
         raise SystemExit("Dataset must contain metadata.json and data.yaml")
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    if metadata.get("classMapping") != {name: index for index, name in EXPECTED_NAMES.items()}:
-        raise SystemExit("Dataset class mapping differs from the stable Phase 4.2 mapping")
+    if metadata.get("classMapping") != {name: index for index, name in expected_names.items()}:
+        raise SystemExit("Dataset class mapping differs from the requested training profile")
     label_count = 0
     for label in root.glob("labels/*/*.txt"):
         label_count += 1
         for line_number, line in enumerate(label.read_text(encoding="utf-8").splitlines(), 1):
             parts = line.split()
             values = [float(value) for value in parts[1:]] if len(parts) == 5 else []
-            if (len(parts) != 5 or int(parts[0]) not in EXPECTED_NAMES or any(not 0 <= value <= 1 for value in values)
+            if (len(parts) != 5 or int(parts[0]) not in expected_names or any(not 0 <= value <= 1 for value in values)
                     or values[2] <= 0 or values[3] <= 0
                     or values[0] - values[2] / 2 < 0 or values[0] + values[2] / 2 > 1
                     or values[1] - values[3] / 2 < 0 or values[1] + values[3] / 2 > 1):
@@ -58,12 +59,14 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="mps")
+    parser.add_argument("--class-names", nargs="+", default=list(EXPECTED_NAMES.values()))
     args = parser.parse_args()
     if os.environ.get("DATASET_TRAINING_ENABLED", "").lower() != "true":
         raise SystemExit("Set DATASET_TRAINING_ENABLED=true for an explicit administrator training run")
     if not args.base_model.is_file():
         raise SystemExit("The reviewed base model file does not exist")
-    data = validate_dataset(args.dataset.resolve())
+    expected_names = {index: name for index, name in enumerate(args.class_names)}
+    data = validate_dataset(args.dataset.resolve(), expected_names)
     project = Path(__file__).resolve().parents[1] / "data" / "training-runs"
     result = YOLO(str(args.base_model)).train(
         data=str(data), epochs=args.epochs, imgsz=args.imgsz, batch=args.batch,
@@ -71,6 +74,7 @@ def main() -> None:
         device=args.device, project=str(project), name=args.version, exist_ok=False,
     )
     summary = {"version": args.version, "dataset": str(args.dataset.resolve()), "baseModel": str(args.base_model.resolve()),
+               "classMapping": {name: index for index, name in expected_names.items()},
                "epochs": args.epochs, "imgsz": args.imgsz, "batch": args.batch, "patience": args.patience,
                "workers": args.workers, "seed": args.seed, "deterministic": True,
                "device": args.device, "output": str(result.save_dir)}

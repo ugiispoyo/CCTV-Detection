@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     RTSP_RECONNECT_MAX_SECONDS: float = Field(default=30, ge=1, le=600)
 
     MODEL_PATH: str = "yolo26n.pt"
+    EXPERIMENTAL_HYBRID_DETECTOR_ENABLED: bool = False
+    CUSTOM_DETECTOR_MODEL_PATH: str = ""
     DEVICE: Literal["auto", "mps", "cpu"] = "auto"
     CONFIDENCE_THRESHOLD: float = Field(default=0.30, ge=0.01, le=1)
     IOU_THRESHOLD: float = Field(default=0.50, ge=0.01, le=1)
@@ -116,6 +118,14 @@ class Settings(BaseSettings):
             raise ValueError("Counting line endpoints must be different")
         if not self.MODEL_PATH.strip():
             raise ValueError("MODEL_PATH cannot be empty")
+        if self.EXPERIMENTAL_HYBRID_DETECTOR_ENABLED:
+            if not self.CUSTOM_DETECTOR_MODEL_PATH.strip():
+                raise ValueError("CUSTOM_DETECTOR_MODEL_PATH is required for hybrid detector mode")
+            custom_path = Path(self.CUSTOM_DETECTOR_MODEL_PATH).expanduser()
+            if not custom_path.is_absolute():
+                custom_path = PROJECT_ROOT / custom_path
+            if not custom_path.is_file():
+                raise ValueError("CUSTOM_DETECTOR_MODEL_PATH does not exist")
         legacy_url = self.RTSP_URL.get_secret_value()
         if legacy_url:
             rtsp_parts = urlsplit(legacy_url)
@@ -133,6 +143,13 @@ class Settings(BaseSettings):
         if not path.is_absolute():
             path = PROJECT_ROOT / "models" / path.name if path.parent == Path(".") else PROJECT_ROOT / path
         return path.resolve()
+
+    @property
+    def custom_detector_model_path(self) -> Path | None:
+        if not self.CUSTOM_DETECTOR_MODEL_PATH.strip():
+            return None
+        path = Path(self.CUSTOM_DETECTOR_MODEL_PATH).expanduser()
+        return (PROJECT_ROOT / path).resolve() if not path.is_absolute() else path.resolve()
 
     @property
     def preview_ws_url(self) -> str:

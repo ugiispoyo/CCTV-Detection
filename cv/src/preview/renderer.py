@@ -12,6 +12,7 @@ COLORS: dict[str, tuple[int, int, int]] = {
     "person": (180, 60, 180),
     "car": (60, 180, 75),
     "motorcycle": (230, 120, 40),
+    "head": (40, 190, 230),
 }
 
 
