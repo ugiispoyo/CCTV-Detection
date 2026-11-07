@@ -24,6 +24,8 @@ class PendingFrame:
     sequence: int
     frame: EncodedPreviewFrame
     object_counts: dict[str, int]
+    tracks: list[dict[str, object]]
+    session_id: str
 
 
 class PreviewPublisher:
@@ -55,12 +57,12 @@ class PreviewPublisher:
     def start(self) -> None:
         self._thread.start()
 
-    def submit(self, frame: EncodedPreviewFrame, object_counts: dict[str, int]) -> None:
+    def submit(self, frame: EncodedPreviewFrame, object_counts: dict[str, int], tracks: list[dict[str, object]], session_id: str) -> None:
         with self._lock:
             if self._latest is not None:
                 self._dropped += 1
             self._sequence += 1
-            self._latest = PendingFrame(self._sequence, frame, dict(object_counts))
+            self._latest = PendingFrame(self._sequence, frame, dict(object_counts), list(tracks), session_id)
 
     def join(self, timeout: float = 10) -> None:
         self._thread.join(timeout)
@@ -128,6 +130,8 @@ class PreviewPublisher:
                     "sequence": pending.sequence,
                     "timestamp": pending.frame.timestamp_ms,
                     "counts": pending.object_counts,
+                    "tracks": pending.tracks,
+                    "sessionId": pending.session_id,
                 }, separators=(",", ":")))
                 await websocket.send(self._packet(pending))
 

@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from "fastify";
 import type { WebSocket } from "ws";
 import { env } from "../../config/env.js";
 import type { PreviewFrameMetadata, PreviewObjectsMessage } from "./preview.types.js";
+import { updateActiveTracks } from "./track-activity.js";
 
 interface PublisherSession { socket: WebSocket; workerId: string }
 interface LatestFrame { packet: Buffer; metadata: PreviewFrameMetadata; receivedAt: number }
@@ -49,6 +50,7 @@ export class PreviewRegistry {
   publishObjects(cameraId: string, socket: WebSocket, message: PreviewObjectsMessage): boolean {
     if (this.publishers.get(cameraId)?.socket !== socket) return false;
     this.latestObjects.set(cameraId, message);
+    updateActiveTracks(cameraId, message.sessionId, message.tracks);
     const serialized = JSON.stringify({ ...message, cameraId });
     for (const subscriber of this.subscribers.get(cameraId) ?? []) {
       if (subscriber.readyState === subscriber.OPEN && subscriber.bufferedAmount <= env.LIVE_PREVIEW_MAX_FRAME_BYTES * 2) subscriber.send(serialized);

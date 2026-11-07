@@ -5,6 +5,22 @@ const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:5005";
 
 export const api = axios.create({ baseURL, timeout: 10_000, headers: { Accept: "application/json" } });
 
+export function getOperatorToken(): string {
+  return sessionStorage.getItem("cctv.operatorToken") ?? import.meta.env.VITE_OPERATOR_TOKEN ?? "";
+}
+
+export function setOperatorToken(token: string): void {
+  if (token) sessionStorage.setItem("cctv.operatorToken", token);
+  else sessionStorage.removeItem("cctv.operatorToken");
+  window.dispatchEvent(new Event("operator-token-changed"));
+}
+
+api.interceptors.request.use((config) => {
+  const token = getOperatorToken();
+  if (token) config.headers.set("X-Operator-Token", token);
+  return config;
+});
+
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly status?: number) {
     super(message);

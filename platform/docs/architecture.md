@@ -60,3 +60,22 @@ The `/ws` connection remains the notification channel. The separate `/internal/c
 - Authorization headers and named secrets are redacted from logs. Responses never expose stack traces or MongoDB details.
 - Production worker traffic must use HTTPS or a trusted encrypted private network. MongoDB is never exposed to the browser.
 - A heartbeat proves recent worker communication. It does not independently prove that an RTSP stream is healthy; Phase 2 should report stream health separately.
+
+## Person review flow
+
+```mermaid
+sequenceDiagram
+  participant CV as Python CV
+  participant API as Fastify
+  participant DB as MongoDB + private files
+  participant UI as Dashboard on any page
+  CV->>API: Authenticated idempotent person crop
+  API->>DB: Private JPEG + pending metadata
+  API-->>UI: person_capture.created metadata
+  UI->>UI: Top-right toast
+  UI->>API: Click toast and load quick-label modal
+  UI->>API: Explicit dismiss/link/create-and-link
+  API->>DB: Transactional verification + audit
+```
+
+The crop reuses the existing tracked person box rather than running another detector. JPEGs are never stored in MongoDB or sent over notification WebSockets. Labeling routes rely on localhost/trusted-LAN deployment rather than an application token, so public exposure is unsupported.

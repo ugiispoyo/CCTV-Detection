@@ -1,9 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { getOperatorToken } from "../lib/api";
 
 export function useRealtime() {
   const queryClient = useQueryClient();
   const reconnects = useRef(0);
+  const [operatorToken, setToken] = useState(getOperatorToken);
+
+  useEffect(() => { const update = () => setToken(getOperatorToken()); window.addEventListener("operator-token-changed", update); return () => window.removeEventListener("operator-token-changed", update); }, []);
 
   useEffect(() => {
     let socket: WebSocket | undefined;
@@ -11,8 +15,9 @@ export function useRealtime() {
     let stopped = false;
     const base = (import.meta.env.VITE_WS_URL ?? "ws://localhost:5005").replace(/\/$/, "");
     const notificationsUrl = base.endsWith("/ws") ? base : `${base}/ws`;
+    const operatorProtocol = operatorToken ? `cctv-operator.${btoa(String.fromCharCode(...new TextEncoder().encode(operatorToken))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}` : undefined;
     const connect = () => {
-      socket = new WebSocket(notificationsUrl);
+      socket = operatorProtocol ? new WebSocket(notificationsUrl, operatorProtocol) : new WebSocket(notificationsUrl);
       socket.onopen = () => {
         const wasReconnect = reconnects.current > 0;
         reconnects.current = 0;
@@ -24,6 +29,11 @@ export function useRealtime() {
           if (message.type === "detection.created") void queryClient.invalidateQueries({ queryKey: ["detections"] });
           if (message.type === "counting.updated") void queryClient.invalidateQueries({ queryKey: ["statistics"] });
           if (message.type === "camera.status_changed") void queryClient.invalidateQueries({ queryKey: ["cameras"] });
+          if (message.type === "identity.verified") void queryClient.invalidateQueries({ queryKey: ["active-identities"] });
+          if (message.type === "person_capture.created") {
+            void queryClient.invalidateQueries({ queryKey: ["person-captures"] });
+            window.dispatchEvent(new CustomEvent("person-capture-created", { detail: message }));
+          }
         } catch { /* Ignore malformed notification payloads. REST remains authoritative. */ }
       };
       socket.onclose = () => {
@@ -34,5 +44,5 @@ export function useRealtime() {
     };
     connect();
     return () => { stopped = true; if (timer) window.clearTimeout(timer); socket?.close(); };
-  }, [queryClient]);
+  }, [operatorToken, queryClient]);
 }

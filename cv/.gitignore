@@ -10,5 +10,8 @@ data/*.sqlite3
 data/*.sqlite3-shm
 data/*.sqlite3-wal
 data/ultralytics/
+data/snapshots/
+data/datasets/
+data/training-runs/
 *.log
 .DS_Store

@@ -22,4 +22,6 @@ Each WebSocket binary message is a 32-byte big-endian header followed immediatel
 
 The initial text message is `preview.register`; Fastify replies with `preview.registered` before binary frames are allowed. The publisher uses an Authorization header, never a query token.
 
+Before each binary frame, the worker sends a versioned `preview.objects` message with the same sequence number, tracker session ID, current tracked counts, and normalized track boxes. These values are ephemeral “visible now” telemetry used to confirm whether a manually verified track is still active. They contain no resident identity and are not persisted.
+
 This preview is intended for trusted local deployment at approximately 2–10 FPS. WebRTC or a dedicated streaming gateway is a better future choice for high frame rates, many cameras, or remote/public viewing.

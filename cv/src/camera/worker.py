@@ -11,6 +11,7 @@ from src.monitoring.metrics import RuntimeMetrics
 from src.preview.encoder import JpegPreviewEncoder
 from src.preview.publisher import PreviewPublisher
 from src.preview.renderer import PreviewRenderer
+from src.person_capture.capture_manager import PersonCaptureManager
 from src.queue.event_queue import EventQueue
 from src.tracking.tracker import ByteTrackTracker
 
@@ -30,6 +31,7 @@ class CameraWorker:
         live_preview_fps: float,
         preview_encoder: JpegPreviewEncoder | None,
         preview_publisher: PreviewPublisher | None,
+        person_capture: PersonCaptureManager | None,
         stop_event: threading.Event,
     ) -> None:
         self._camera_id = camera_id
@@ -44,6 +46,7 @@ class CameraWorker:
         self._live_preview_interval = 1 / live_preview_fps
         self._preview_encoder = preview_encoder
         self._preview_publisher = preview_publisher
+        self._person_capture = person_capture
         self._stop_event = stop_event
 
     def run(self) -> None:
@@ -81,6 +84,8 @@ class CameraWorker:
                 last_generation = latest.connection_generation
                 self._tracker.reset()
                 self._counting.reset_tracking()
+                if self._person_capture is not None:
+                    self._person_capture.reset(self._tracker.session_id)
 
             try:
                 tracks, latency_ms = self._tracker.track(latest.image)
@@ -91,6 +96,8 @@ class CameraWorker:
                     inserted = self._queue.enqueue(event)
                     if not inserted:
                         LOGGER.warning("Event already present in local queue event_id=%s", event.eventId)
+                if self._person_capture is not None:
+                    self._person_capture.process(latest.image, tracks, self._tracker.session_id, events)
                 self._metrics.record_frame(latency_ms)
             except Exception:
                 LOGGER.exception("Inference frame failed camera_id=%s", self._camera_id)
@@ -122,7 +129,16 @@ class CameraWorker:
                                 "person": visible["person"],
                                 "car": visible["car"],
                                 "motorcycle": visible["motorcycle"],
-                            })
+                            }, [{
+                                "trackId": track.track_id,
+                                "objectType": track.object_type,
+                                "bbox": [
+                                    min(max(track.bbox[0] / latest.image.shape[1], 0), 1),
+                                    min(max(track.bbox[1] / latest.image.shape[0], 0), 1),
+                                    min(max(track.bbox[2] / latest.image.shape[1], 0), 1),
+                                    min(max(track.bbox[3] / latest.image.shape[0], 0), 1),
+                                ],
+                            } for track in tracks], self._tracker.session_id)
                 except Exception:
                     LOGGER.exception("Live preview rendering failed camera_id=%s", self._camera_id)
 

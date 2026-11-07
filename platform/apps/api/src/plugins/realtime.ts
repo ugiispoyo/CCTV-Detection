@@ -2,6 +2,7 @@ import websocket from "@fastify/websocket";
 import fp from "fastify-plugin";
 import { env } from "../config/env.js";
 import { RealtimeBroker } from "../websocket/broker.js";
+import { isValidOperatorProtocol } from "./operator-auth.js";
 
 declare module "fastify" {
   interface FastifyInstance { realtime: RealtimeBroker }
@@ -17,7 +18,8 @@ export const realtimePlugin = fp(async (app) => {
       socket.close(1008, "Origin not allowed");
       return;
     }
-    broker.add(socket);
+    const protocol = request.headers["sec-websocket-protocol"]?.split(",").map((value) => value.trim()).find((value) => value.startsWith("cctv-operator."));
+    broker.add(socket, isValidOperatorProtocol(protocol));
     socket.send(JSON.stringify({ type: "connection.ready", data: { timestamp: new Date().toISOString() } }));
   });
 });

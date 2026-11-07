@@ -16,6 +16,10 @@ Interactive schemas and examples are served from `/docs`; the generated OpenAPI 
 | Internal CV | `POST /internal/cv/events` | Transactional, idempotent ingestion |
 | Internal CV | `POST /internal/cv/heartbeat` | Latest worker status |
 | Internal CV | `GET /internal/cv/config` | Active non-secret camera configuration |
+| Internal CV | `POST /internal/cv/person-captures` | Bearer-authenticated dual-image crossing capture |
+| Person Captures | `GET /api/person-captures/:id/images/full-body|head` | Protected private images |
+| Dataset | `/api/dataset/annotations`, `/api/dataset/exports`, `/api/dataset/versions` | Protected annotation/version workflow |
+| Models | `/api/models/versions` | Candidate metrics, approval, and explicit activation registry |
 | Live Preview | `WS /internal/cv/preview` | Bearer-authenticated CV JPEG publisher |
 | Live Preview | `WS /ws/cameras/:cameraId/live` | Origin-validated browser subscription |
 
@@ -64,3 +68,17 @@ Camera create/update accepts optional `physicalCameraId` and `lensName`. These a
 ## Live preview WebSocket
 
 The worker first sends `{"type":"preview.register","version":1,"cameraId":"cam-001","workerId":"cv-worker-001"}` and waits for `preview.registered`. Binary messages then contain the documented 32-byte big-endian header plus JPEG payload. Fastify validates camera activity, publisher ownership, header fields, JPEG markers, dimensions, and size before relaying. Browser subscribers never receive or send the service token. See [live preview protocol](live-preview.md).
+
+## Person capture and labeling
+
+- `POST /internal/cv/person-captures` accepts an authenticated, idempotent person crop.
+- `GET /api/person-captures` supports pagination plus camera, review-status, and `direction=in|out` filters.
+- `GET /api/person-captures/quality-metrics` reports crossing-to-capture, current full-body/head availability, and review outcomes per camera and direction. Its response states retention and ground-truth limitations.
+- `DELETE /api/person-captures/:captureId` with `{ "confirmed": true }` permanently removes a pending or dismissed capture, its private JPEGs, and non-approved annotation drafts. Reviewed/linked or dataset-approved captures return `409`.
+- Capture detail, non-static JPEG retrieval, review, and explicit verification use `/api/person-captures/:captureId` subroutes.
+- `GET|POST /api/people` and `GET|PATCH /api/people/:personId` manage minimal profiles.
+- Credential creation, revocation, and verification routes are rate limited and store only HMAC verifiers.
+
+CV ingestion requires the service Bearer token. Sensitive routes require `X-Operator-Token`; verification requires `confirmed: true`. Capture ingestion includes `lineId`, `direction`, full-body JPEG, and optional head JPEG. There is no biometric matching.
+
+Dataset annotation creation rejects identical bounding boxes for the same capture/image/class. Corrections and approval/rejection transitions are audit-recorded. Candidate model versions support separate approve, reject, and activate operations; none deploy a weight file automatically.

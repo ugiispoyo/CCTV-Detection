@@ -16,7 +16,7 @@ A distance greater than the pixel margin is the positive side; less than the neg
 
 `negative_to_positive` or `positive_to_negative` is mapped to IN; the other transition is OUT. Line endpoint order defines the sign, so verify perspective with real footage.
 
-Each track can count once per line and session. Short tracking losses preserve side state for 30 seconds. Reconnects reset tracking-specific state safely. Generated UUID event IDs are stored in SQLite before delivery and remain unchanged across HTTP retries; Fastify provides a second database-enforced idempotency boundary.
+Each stable side transition can count after `COUNTING_REARM_SECONDS`. A track may therefore produce IN and a later OUT event, while the neutral hysteresis band and minimum event separation suppress frame-to-frame line jitter. Short tracking losses preserve side state for 30 seconds. Reconnects reset tracking-specific state safely. Every genuine transition receives an independent UUID; that event ID is stored in SQLite before delivery and remains unchanged across HTTP retries. Fastify provides a second database-enforced idempotency boundary.
 
 ## Anchor and units
 
@@ -27,4 +27,4 @@ Each track can count once per line and session. Short tracking losses preserve s
 - A rider and motorcycle are separate COCO classes and are counted independently.
 - Phase 2 does not associate riders with motorcycles or distinguish riders from pedestrians.
 - Occlusion, ID switches, poor camera angles, and detections below the threshold can affect counts.
-- One track is allowed one crossing per session, favoring duplicate prevention over counting repeated back-and-forth movement.
+- Very fast reversals inside the configured re-arm interval are intentionally suppressed as probable line jitter.

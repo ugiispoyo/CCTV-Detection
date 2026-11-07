@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     COUNTING_MARGIN: float = Field(default=8, gt=0, le=500)
     COUNTING_DIRECTION_IN: Literal["negative_to_positive", "positive_to_negative"] = "negative_to_positive"
     COUNTING_ANCHOR: Literal["bottom_center", "center"] = "bottom_center"
+    COUNTING_REARM_SECONDS: float = Field(default=1.5, ge=0.5, le=30)
 
     API_TIMEOUT_SECONDS: float = Field(default=5, gt=0, le=120)
     EVENT_RETRY_INITIAL_SECONDS: float = Field(default=2, ge=0.5, le=300)
@@ -69,6 +70,31 @@ class Settings(BaseSettings):
     EVENT_QUEUE_DATABASE: str = "data/events.sqlite3"
     EVENT_QUEUE_MAX_PENDING: int = Field(default=10_000, ge=100, le=1_000_000)
     EVENT_QUEUE_RETAIN_DELIVERED: bool = False
+    PERSON_CAPTURE_ENABLED: bool = True
+    PERSON_CAPTURE_TRIGGER: Literal["line_crossing"] = "line_crossing"
+    PERSON_CAPTURE_DIRECTION: Literal["in", "out", "both"] = "both"
+    PERSON_FULL_BODY_CROP_ENABLED: bool = True
+    PERSON_CAPTURE_MIN_CONFIDENCE: float = Field(default=0.65, ge=0.01, le=1)
+    PERSON_CAPTURE_MIN_WIDTH: int = Field(default=80, ge=16, le=4096)
+    PERSON_CAPTURE_MIN_HEIGHT: int = Field(default=140, ge=16, le=4096)
+    PERSON_CAPTURE_PADDING: float = Field(default=0.10, ge=0, le=0.5)
+    PERSON_CAPTURE_JPEG_QUALITY: int = Field(default=80, ge=30, le=95)
+    PERSON_CAPTURE_MAX_CANDIDATES: int = Field(default=5, ge=1, le=30)
+    PERSON_CAPTURE_BUFFER_SECONDS: float = Field(default=3, ge=0.5, le=30)
+    PERSON_HEAD_CROP_ENABLED: bool = True
+    HEAD_DETECTION_MODEL_PATH: str = ""
+    HEAD_DETECTION_ALLOW_OPENCV_FALLBACK: bool = True
+    HEAD_DETECTION_MIN_CONFIDENCE: float = Field(default=0.60, ge=0.01, le=1)
+    HEAD_CROP_PADDING: float = Field(default=0.15, ge=0, le=0.5)
+    HEAD_CROP_MIN_WIDTH: int = Field(default=40, ge=8, le=2048)
+    HEAD_CROP_MIN_HEIGHT: int = Field(default=40, ge=8, le=2048)
+    PERSON_CAPTURE_MAX_FILE_BYTES: int = Field(default=524_288, ge=32_768, le=5_242_880)
+    PERSON_CAPTURE_STORAGE_DIR: str = "data/snapshots"
+    PERSON_CAPTURE_RETENTION_DAYS: int = Field(default=7, ge=1, le=365)
+    PERSON_CAPTURE_RETRY_INITIAL_SECONDS: float = Field(default=2, ge=0.5, le=300)
+    PERSON_CAPTURE_RETRY_MAX_SECONDS: float = Field(default=60, ge=1, le=3600)
+    DATASET_EXPORT_DIR: str = "data/datasets"
+    DATASET_TRAINING_ENABLED: bool = False
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
     @model_validator(mode="after")
@@ -79,6 +105,8 @@ class Settings(BaseSettings):
             raise ValueError("Event retry initial delay cannot exceed maximum delay")
         if self.CV_PREVIEW_RECONNECT_INITIAL_SECONDS > self.CV_PREVIEW_RECONNECT_MAX_SECONDS:
             raise ValueError("Preview reconnect initial delay cannot exceed maximum delay")
+        if self.PERSON_CAPTURE_RETRY_INITIAL_SECONDS > self.PERSON_CAPTURE_RETRY_MAX_SECONDS:
+            raise ValueError("Person capture retry initial delay cannot exceed maximum delay")
         if not self.CV_HEADLESS or self.LOCAL_PREVIEW_ENABLED:
             raise ValueError("The CV runtime is headless; local GUI preview is not supported")
         if (self.COUNTING_LINE_X1, self.COUNTING_LINE_Y1) == (
@@ -118,4 +146,21 @@ class Settings(BaseSettings):
     @property
     def camera_config_path(self) -> Path:
         path = Path(self.CAMERA_CONFIG).expanduser()
+        return (PROJECT_ROOT / path).resolve() if not path.is_absolute() else path.resolve()
+
+    @property
+    def person_capture_storage_path(self) -> Path:
+        path = Path(self.PERSON_CAPTURE_STORAGE_DIR).expanduser()
+        return (PROJECT_ROOT / path).resolve() if not path.is_absolute() else path.resolve()
+
+    @property
+    def head_detection_model_path(self) -> Path | None:
+        if not self.HEAD_DETECTION_MODEL_PATH.strip():
+            return None
+        path = Path(self.HEAD_DETECTION_MODEL_PATH).expanduser()
+        return (PROJECT_ROOT / path).resolve() if not path.is_absolute() else path.resolve()
+
+    @property
+    def dataset_export_path(self) -> Path:
+        path = Path(self.DATASET_EXPORT_DIR).expanduser()
         return (PROJECT_ROOT / path).resolve() if not path.is_absolute() else path.resolve()

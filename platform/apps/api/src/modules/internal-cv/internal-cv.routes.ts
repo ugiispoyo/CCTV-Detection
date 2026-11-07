@@ -3,12 +3,14 @@ import { errorResponseSchema, ok } from "../../lib/schemas.js";
 import { requireServiceToken } from "./internal-cv.auth.js";
 import { cvConfigResponseSchema, cvEventResponseSchema, cvEventSchema, heartbeatResponseSchema, heartbeatSchema } from "./internal-cv.schema.js";
 import { getWorkerConfig, ingestEvent, recordHeartbeat } from "./internal-cv.service.js";
+import { captureIngestResponseSchema, captureIngestSchema } from "../person-captures/person-capture.schema.js";
+import { ingestPersonCapture } from "../person-captures/person-capture.service.js";
 
 const security = [{ bearerAuth: [] }];
 const errors = { 400: errorResponseSchema, 401: errorResponseSchema, 404: errorResponseSchema, 409: errorResponseSchema, 429: errorResponseSchema, 500: errorResponseSchema };
 
 export const internalCvRoutes: FastifyPluginAsyncZod = async (app) => {
-  app.addHook("preHandler", requireServiceToken);
+  app.addHook("onRequest", requireServiceToken);
 
   app.post("/internal/cv/events", {
     bodyLimit: 64 * 1024,
@@ -24,6 +26,16 @@ export const internalCvRoutes: FastifyPluginAsyncZod = async (app) => {
       } });
     }
     return reply.code(result.duplicate ? 200 : 201).send(ok({ event: result.event, duplicate: result.duplicate }));
+  });
+
+  app.post("/internal/cv/person-captures", {
+    bodyLimit: 15 * 1024 * 1024,
+    config: { rateLimit: { max: 120, timeWindow: "1 minute" } },
+    schema: { tags: ["Internal CV"], summary: "Upload an idempotent person review crop", security, body: captureIngestSchema, response: { 200: captureIngestResponseSchema, 201: captureIngestResponseSchema, ...errors } },
+  }, async (request, reply) => {
+    const result = await ingestPersonCapture(request.body);
+    if (!result.duplicate) app.realtime.publish({ type: "person_capture.created", data: { captureId: result.capture.captureId, cameraId: result.capture.cameraId, capturedAt: result.capture.capturedAt, reviewStatus: "pending" } }, { operatorOnly: true });
+    return reply.code(result.duplicate ? 200 : 201).send(ok(result));
   });
 
   app.post("/internal/cv/heartbeat", {

@@ -70,6 +70,6 @@ export interface ApiFailure {
 export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
 export interface RealtimeMessage<T = unknown> {
-  type: "detection.created" | "counting.updated" | "camera.status_changed";
+  type: "detection.created" | "counting.updated" | "camera.status_changed" | "person_capture.created" | "identity.verified";
   data: T;
 }

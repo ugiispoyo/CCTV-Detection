@@ -22,8 +22,13 @@ from src.monitoring.metrics import RuntimeMetrics
 from src.preview.encoder import JpegPreviewEncoder
 from src.preview.publisher import PreviewPublisher
 from src.preview.renderer import PreviewRenderer
+from src.person_capture.capture_manager import PersonCaptureManager
+from src.person_capture.head_detector import HeadDetector
+from src.person_capture.snapshot_manager import SnapshotManager
 from src.queue.event_queue import EventQueue
 from src.queue.event_sender import EventSender
+from src.queue.snapshot_queue import SnapshotQueue
+from src.queue.snapshot_sender import SnapshotSender
 from src.tracking.tracker import ByteTrackTracker
 from src.utils.logger import configure_logging, sanitize_error
 
@@ -72,6 +77,8 @@ def run() -> int:
         settings.EVENT_QUEUE_MAX_PENDING,
         settings.EVENT_QUEUE_RETAIN_DELIVERED,
     )
+    snapshot_queue = SnapshotQueue(settings.queue_database_path, settings.EVENT_QUEUE_MAX_PENDING)
+    snapshot_storage = SnapshotManager(settings.person_capture_storage_path)
     api = APIClient(
         settings.api_base_url,
         settings.CV_SERVICE_TOKEN.get_secret_value(),
@@ -83,6 +90,7 @@ def run() -> int:
         inference_lock = threading.Lock()
         runtimes: list[CameraRuntime] = []
         selected_device = "unknown"
+        head_detector: HeadDetector | None = None
         for camera in camera_configs:
             try:
                 api_config = api.get_camera_config(camera.camera_id)
@@ -106,6 +114,13 @@ def run() -> int:
 
             detector = Detector(settings.model_path, settings.DEVICE)
             selected_device = detector.device
+            if head_detector is None:
+                head_detector = HeadDetector(
+                    settings.head_detection_model_path if settings.PERSON_HEAD_CROP_ENABLED else None,
+                    settings.HEAD_DETECTION_MIN_CONFIDENCE,
+                    selected_device,
+                    settings.HEAD_DETECTION_ALLOW_OPENCV_FALLBACK,
+                )
             tracker = ByteTrackTracker(
                 detector,
                 settings.CONFIDENCE_THRESHOLD,
@@ -118,6 +133,7 @@ def run() -> int:
                 camera.margin_pixels,
                 camera.direction_in,
                 camera.anchor,
+                camera.rearm_seconds,
             )
             counting = CountingManager(camera.camera_id, line_counter)
             renderer = PreviewRenderer(camera.camera_id, line_counter, camera.direction_in)
@@ -166,6 +182,17 @@ def run() -> int:
                 camera.live_preview_fps,
                 preview_encoder,
                 preview_publisher,
+                PersonCaptureManager(
+                    camera.camera_id, camera.line_id, snapshot_queue, snapshot_storage,
+                    head_detector, settings.PERSON_FULL_BODY_CROP_ENABLED,
+                    settings.PERSON_HEAD_CROP_ENABLED, settings.PERSON_CAPTURE_DIRECTION,
+                    camera.person_capture_min_confidence, camera.person_capture_min_width,
+                    camera.person_capture_min_height, settings.PERSON_CAPTURE_PADDING,
+                    settings.PERSON_CAPTURE_JPEG_QUALITY, settings.PERSON_CAPTURE_MAX_CANDIDATES,
+                    settings.PERSON_CAPTURE_BUFFER_SECONDS, settings.PERSON_CAPTURE_MAX_FILE_BYTES,
+                    settings.HEAD_CROP_PADDING, settings.HEAD_CROP_MIN_WIDTH,
+                    settings.HEAD_CROP_MIN_HEIGHT,
+                ) if settings.PERSON_CAPTURE_ENABLED else None,
                 stop_event,
             )
             heartbeat = HeartbeatService(
@@ -201,14 +228,22 @@ def run() -> int:
             settings.EVENT_RETRY_INITIAL_SECONDS,
             settings.EVENT_RETRY_MAX_SECONDS,
         )
+        snapshot_sender = SnapshotSender(
+            snapshot_queue, snapshot_storage, api, stop_event,
+            settings.PERSON_CAPTURE_RETRY_INITIAL_SECONDS,
+            settings.PERSON_CAPTURE_RETRY_MAX_SECONDS,
+            settings.PERSON_CAPTURE_RETENTION_DAYS,
+        )
         _print_summary(settings, camera_configs, selected_device)
         sender.start()
+        snapshot_sender.start()
         try:
             manager.run()
         finally:
             stop_event.set()
             manager.join()
             sender.join()
+            snapshot_sender.join()
     except (APIAuthenticationError, CameraConfigurationError, ValueError) as exc:
         LOGGER.critical("Startup rejected by Fastify: %s", sanitize_error(exc))
         return 2
@@ -218,6 +253,7 @@ def run() -> int:
     finally:
         api.close()
         queue.close()
+        snapshot_queue.close()
         LOGGER.info("CV service stopped; unsent events remain durable")
     return 0
 

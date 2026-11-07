@@ -31,6 +31,15 @@ class CountingConfig(BaseModel):
     direction_in: Literal["negative_to_positive", "positive_to_negative"]
     margin_pixels: float | None = Field(default=None, gt=0, le=500)
     anchor: Literal["bottom_center", "center"] | None = None
+    line_id: str = Field(default="entry-line", min_length=1, max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    rearm_seconds: float | None = Field(default=None, ge=0.5, le=30)
+
+
+class PersonCaptureOverrides(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    min_confidence: float | None = Field(default=None, ge=0.01, le=1)
+    min_width: int | None = Field(default=None, ge=16, le=4096)
+    min_height: int | None = Field(default=None, ge=16, le=4096)
 
 
 class CameraFileConfig(BaseModel):
@@ -42,6 +51,7 @@ class CameraFileConfig(BaseModel):
     enabled: bool = True
     rtsp_url_env: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
     counting: CountingConfig
+    person_capture: PersonCaptureOverrides | None = None
     target_processing_fps: float | None = Field(default=None, gt=0, le=120)
     image_size: int | None = Field(default=None, ge=160, le=2048, multiple_of=32)
     live_preview_fps: float | None = Field(default=None, ge=2, le=10)
@@ -69,6 +79,8 @@ class CameraRuntimeConfig(BaseModel):
     physical_camera_id: str | None
     name: str
     lens_name: str | None
+    line_id: str
+    rearm_seconds: float
     rtsp_url: SecretStr
     line: tuple[float, float, float, float]
     direction_in: Literal["negative_to_positive", "positive_to_negative"]
@@ -79,6 +91,9 @@ class CameraRuntimeConfig(BaseModel):
     live_preview_fps: float
     live_preview_width: int
     live_preview_jpeg_quality: int
+    person_capture_min_confidence: float
+    person_capture_min_width: int
+    person_capture_min_height: int
 
 
 def _environment_values() -> dict[str, str]:
@@ -106,11 +121,14 @@ def load_camera_configs(settings: Settings) -> list[CameraRuntimeConfig]:
                 f"Enabled camera {camera.camera_id!r} requires a valid URL in {camera.rtsp_url_env}"
             )
         line = camera.counting.line
+        person_capture = camera.person_capture or PersonCaptureOverrides()
         runtimes.append(CameraRuntimeConfig(
             camera_id=camera.camera_id,
             physical_camera_id=camera.physical_camera_id,
             name=camera.name,
             lens_name=camera.lens_name,
+            line_id=camera.counting.line_id,
+            rearm_seconds=camera.counting.rearm_seconds or settings.COUNTING_REARM_SECONDS,
             rtsp_url=SecretStr(raw_url),
             line=(line.x1, line.y1, line.x2, line.y2),
             direction_in=camera.counting.direction_in,
@@ -121,6 +139,9 @@ def load_camera_configs(settings: Settings) -> list[CameraRuntimeConfig]:
             live_preview_fps=camera.live_preview_fps or settings.LIVE_PREVIEW_FPS,
             live_preview_width=camera.live_preview_width or settings.LIVE_PREVIEW_WIDTH,
             live_preview_jpeg_quality=camera.live_preview_jpeg_quality or settings.LIVE_PREVIEW_JPEG_QUALITY,
+            person_capture_min_confidence=person_capture.min_confidence or settings.PERSON_CAPTURE_MIN_CONFIDENCE,
+            person_capture_min_width=person_capture.min_width or settings.PERSON_CAPTURE_MIN_WIDTH,
+            person_capture_min_height=person_capture.min_height or settings.PERSON_CAPTURE_MIN_HEIGHT,
         ))
     return runtimes
 
@@ -135,6 +156,8 @@ def _legacy_camera(settings: Settings) -> CameraRuntimeConfig:
         physical_camera_id=None,
         name=settings.CAMERA_ID,
         lens_name=None,
+        line_id="entry-line",
+        rearm_seconds=settings.COUNTING_REARM_SECONDS,
         rtsp_url=SecretStr(raw_url),
         line=(settings.COUNTING_LINE_X1, settings.COUNTING_LINE_Y1, settings.COUNTING_LINE_X2, settings.COUNTING_LINE_Y2),
         direction_in=settings.COUNTING_DIRECTION_IN,
@@ -145,4 +168,7 @@ def _legacy_camera(settings: Settings) -> CameraRuntimeConfig:
         live_preview_fps=settings.LIVE_PREVIEW_FPS,
         live_preview_width=settings.LIVE_PREVIEW_WIDTH,
         live_preview_jpeg_quality=settings.LIVE_PREVIEW_JPEG_QUALITY,
+        person_capture_min_confidence=settings.PERSON_CAPTURE_MIN_CONFIDENCE,
+        person_capture_min_width=settings.PERSON_CAPTURE_MIN_WIDTH,
+        person_capture_min_height=settings.PERSON_CAPTURE_MIN_HEIGHT,
     )

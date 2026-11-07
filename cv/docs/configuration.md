@@ -37,6 +37,11 @@ Configuration is loaded from `cv/.env` based on the source location, not the she
 | `COUNTING_MARGIN` | Hysteresis distance in **pixels of the original captured frame** |
 | `COUNTING_DIRECTION_IN` | Which signed-side transition maps to `in` |
 | `COUNTING_ANCHOR` | `bottom_center` or bounding-box `center` |
+| `COUNTING_REARM_SECONDS` | Minimum separation between genuine crossing events on one track |
+| `PERSON_CAPTURE_DIRECTION` | `both` by default in Phase 5; may be restricted to `in` or `out` operationally |
+| `PERSON_CAPTURE_BUFFER_SECONDS` | Maximum age of bounded best-frame candidates |
+| `PERSON_CAPTURE_MAX_CANDIDATES` | Maximum candidate crops retained per active person track |
+| `HEAD_DETECTION_MODEL_PATH` | Reviewed head-object detector used only after crossing |
 | `API_TIMEOUT_SECONDS` | HTTP connect/read/write/pool timeout |
 | `EVENT_RETRY_INITIAL_SECONDS` | First transient delivery retry delay |
 | `EVENT_RETRY_MAX_SECONDS` | Backoff and authentication-pause ceiling |
@@ -49,4 +54,4 @@ Configuration is loaded from `cv/.env` based on the source location, not the she
 
 Line orientation matters. Reversing its endpoints reverses signed sides and therefore IN/OUT unless `COUNTING_DIRECTION_IN` is changed too.
 
-Per-camera YAML values can override FPS, inference size, preview limits, counting line, direction, margin, and anchor. Never place RTSP URLs or credentials in YAML.
+Per-camera YAML values can override FPS, inference size, preview limits, counting line, direction, margin, anchor, and person-candidate minimum confidence/width/height. Candidate overrides do not change YOLO tracking or counting thresholds; they only account for different lens scale when selecting a post-crossing crop. Never place RTSP URLs or credentials in YAML.

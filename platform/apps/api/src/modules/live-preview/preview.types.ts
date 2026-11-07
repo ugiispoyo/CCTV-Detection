@@ -23,6 +23,8 @@ export interface PreviewObjectsMessage {
   sequence: number;
   timestamp: number;
   counts: { person: number; car: number; motorcycle: number };
+  tracks: Array<{ trackId: number; objectType: "person" | "car" | "motorcycle"; bbox: [number, number, number, number] }>;
+  sessionId: string;
 }
 
 export function parsePreviewFrame(frame: Buffer, maximumBytes: number): PreviewFrameMetadata | null {
@@ -63,11 +65,20 @@ export function parsePreviewObjects(value: string): PreviewObjectsMessage | null
   try {
     const candidate = JSON.parse(value) as Record<string, unknown>;
     const counts = candidate.counts as Record<string, unknown> | undefined;
+    const tracks = candidate.tracks;
     if (
       candidate.type !== "preview.objects" || candidate.version !== PREVIEW_PROTOCOL_VERSION ||
       typeof candidate.sequence !== "number" || !Number.isSafeInteger(candidate.sequence) || candidate.sequence < 0 ||
       typeof candidate.timestamp !== "number" || !Number.isSafeInteger(candidate.timestamp) ||
-      !counts || ![counts.person, counts.car, counts.motorcycle].every((count) => typeof count === "number" && Number.isSafeInteger(count) && count >= 0 && count <= 1_000)
+      typeof candidate.sessionId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(candidate.sessionId) ||
+      !counts || ![counts.person, counts.car, counts.motorcycle].every((count) => typeof count === "number" && Number.isSafeInteger(count) && count >= 0 && count <= 1_000) ||
+      !Array.isArray(tracks) || tracks.length > 500 || !tracks.every((track) => {
+        if (!track || typeof track !== "object") return false;
+        const value = track as Record<string, unknown>;
+        return typeof value.trackId === "number" && Number.isSafeInteger(value.trackId) && value.trackId >= 0 &&
+          ["person", "car", "motorcycle"].includes(String(value.objectType)) && Array.isArray(value.bbox) && value.bbox.length === 4 &&
+          value.bbox.every((coordinate) => typeof coordinate === "number" && coordinate >= 0 && coordinate <= 1);
+      })
     ) return null;
     return candidate as unknown as PreviewObjectsMessage;
   } catch {

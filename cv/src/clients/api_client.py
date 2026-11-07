@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import base64
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 import httpx
@@ -33,6 +35,23 @@ class HeartbeatPayload(BaseModel):
     cameraId: str
     status: Literal["online", "offline"]
     timestamp: datetime
+
+
+class PersonCapturePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    captureId: str = Field(min_length=36, max_length=36)
+    cameraId: str = Field(min_length=1, max_length=80)
+    sessionId: str = Field(min_length=1, max_length=100)
+    trackId: int = Field(ge=0, le=2_147_483_647)
+    crossingId: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    lineId: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    direction: Direction
+    objectType: Literal["person"] = "person"
+    confidence: float = Field(ge=0, le=1)
+    capturedAt: datetime
+
+    def wire_dict(self) -> dict[str, object]:
+        return self.model_dump(mode="json")
 
 
 class APIAuthenticationError(RuntimeError):
@@ -74,6 +93,21 @@ class APIClient:
         return self._client.post(
             "/internal/cv/heartbeat",
             json=heartbeat.model_dump(mode="json"),
+        )
+
+    def post_person_capture(self, capture: PersonCapturePayload, full_body_path: Path,
+                            head_path: Path | None) -> httpx.Response:
+        full_body = full_body_path.read_bytes()
+        return self._client.post(
+            "/internal/cv/person-captures",
+            json={
+                **capture.wire_dict(),
+                "fullBodyImageBase64": base64.b64encode(full_body).decode("ascii"),
+                **(
+                    {"headImageBase64": base64.b64encode(head_path.read_bytes()).decode("ascii")}
+                    if head_path is not None else {}
+                ),
+            },
         )
 
     def close(self) -> None:

@@ -8,6 +8,7 @@ import { StatusBadge } from "../components/ui/status-badge";
 import { fetchCameras } from "../features/cameras/api";
 import { fetchDetections } from "../features/detections/api";
 import { useLivePreview } from "../features/live-monitoring/hooks/use-live-preview";
+import { fetchActiveIdentities } from "../features/person-labeling/api";
 import { fetchSummary } from "../features/statistics/api";
 import { formatDateTime, labelize } from "../lib/format";
 
@@ -20,6 +21,7 @@ function groupName(camera: Camera): string {
 
 function LiveFeedCard({ camera, enabled }: { camera: Camera; enabled: boolean }) {
   const preview = useLivePreview(camera.cameraId, enabled);
+  const identities = useQuery({ queryKey: ["active-identities", camera.cameraId], queryFn: () => fetchActiveIdentities(camera.cameraId), enabled, refetchInterval: 5_000, retry: false });
   const container = useRef<HTMLDivElement>(null);
   const summary = useQuery({ queryKey: ["statistics", "live", camera.cameraId], queryFn: () => fetchSummary({ range: "today", cameraId: camera.cameraId }), refetchInterval: 15_000 });
   const count = (type: string) => summary.data?.buckets.filter((bucket) => bucket.objectType === type).reduce((total, bucket) => total + bucket.count, 0) ?? 0;
@@ -29,7 +31,7 @@ function LiveFeedCard({ camera, enabled }: { camera: Camera; enabled: boolean })
   const stats = [["Crossed Person", count("person"), Users, "text-purple-600"], ["Crossed Car", count("car"), Car, "text-emerald-600"], ["Crossed Motorcycle", count("motorcycle"), Bike, "text-blue-600"], ["IN", incoming, LogIn, "text-cyan-600"], ["OUT", outgoing, LogOut, "text-orange-600"]] as const;
   return <Card className="overflow-hidden p-0">
     <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3"><div className="min-w-0"><p className="truncate font-semibold">{camera.lensName ?? camera.name}</p><p className="truncate text-xs text-slate-500">{camera.name} · {camera.cameraId}</p></div><div className="flex shrink-0 items-center gap-2"><StatusBadge status={camera.status} /><span className={`rounded-full px-2 py-1 text-xs font-medium ${preview.status === "live" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{statusLabel[preview.status]}</span></div></div>
-    <div ref={container} className="relative grid aspect-video place-items-center bg-slate-950"><canvas ref={preview.canvasRef} className={`h-full w-full object-contain ${preview.status === "live" ? "opacity-100" : "opacity-40"}`} />{preview.status !== "live" && <div className="absolute text-center text-sm text-slate-300"><p className="font-medium">{camera.status === "offline" ? "Camera offline" : statusLabel[preview.status]}</p><p className="mt-1 text-xs text-slate-500">Waiting for fresh annotated frames</p></div>}<button title="Fullscreen" className="absolute right-3 top-3 rounded-lg bg-slate-950/70 p-2 text-white" onClick={() => void container.current?.requestFullscreen()}><Expand className="size-4" /></button></div>
+    <div ref={container} className="relative grid aspect-video place-items-center bg-slate-950"><canvas ref={preview.canvasRef} className={`h-full w-full object-contain ${preview.status === "live" ? "opacity-100" : "opacity-40"}`} />{identities.data?.map((identity) => { const track = preview.visibleTracks.find((item) => item.objectType === "person" && item.trackId === identity.trackId); return track ? <div key={`${identity.sessionId}-${identity.trackId}`} className="pointer-events-none absolute rounded bg-emerald-600/95 px-2 py-1 text-xs font-semibold text-white shadow" style={{ left: `${track.bbox[0] * 100}%`, top: `${Math.max(track.bbox[1] * 100 - 4, 0)}%` }}>{identity.fullName} #{identity.trackId} — Verified</div> : null; })}{preview.status !== "live" && <div className="absolute text-center text-sm text-slate-300"><p className="font-medium">{camera.status === "offline" ? "Camera offline" : statusLabel[preview.status]}</p><p className="mt-1 text-xs text-slate-500">Waiting for fresh annotated frames</p></div>}<button title="Fullscreen" className="absolute right-3 top-3 rounded-lg bg-slate-950/70 p-2 text-white" onClick={() => void container.current?.requestFullscreen()}><Expand className="size-4" /></button></div>
     <div className="flex flex-wrap gap-x-4 gap-y-1 border-b border-slate-100 px-4 py-2 text-xs text-slate-500"><span>Preview <strong>{preview.fps.toFixed(1)} FPS</strong></span><span>Last frame <strong>{preview.lastFrameAt ? formatDateTime(preview.lastFrameAt.toISOString()) : "—"}</strong></span><span>RTSP <strong>{camera.status}</strong></span></div>
     <div className="border-b border-slate-100 p-3"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Visible now</p><div className="grid grid-cols-3 gap-2">{visible.map(([label, value, Icon, tone]) => <div className={`flex items-center justify-between rounded-lg p-2 ${tone}`} key={label}><div className="flex items-center gap-2"><Icon className="size-4" /><span className="text-xs font-medium">{label}</span></div><strong>{value}</strong></div>)}</div></div>
     <div className="grid grid-cols-5 gap-2 p-3">{stats.map(([label, value, Icon, color]) => <div className="rounded-lg bg-slate-50 p-2 text-center" key={label}><Icon className={`mx-auto size-4 ${color}`} /><p className="mt-1 font-bold">{value}</p><p className="text-[10px] text-slate-500">{label}</p></div>)}</div>
@@ -38,7 +40,7 @@ function LiveFeedCard({ camera, enabled }: { camera: Camera; enabled: boolean })
 
 export function LiveMonitoringPage() {
   const camerasQuery = useQuery({ queryKey: ["cameras", "live"], queryFn: () => fetchCameras({ page: 1, limit: 100, active: "true" }), refetchInterval: 15_000 });
-  const [mode, setMode] = useState<"single" | "grid">("single");
+  const [mode, setMode] = useState<"single" | "grid">("grid");
   const [cameraId, setCameraId] = useState<string>();
   const [groupId, setGroupId] = useState<string>();
   const [enabled, setEnabled] = useState(true);

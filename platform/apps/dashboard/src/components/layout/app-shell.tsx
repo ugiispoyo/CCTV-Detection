@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, BarChart3, Camera, CircleDot, LayoutDashboard, Menu, Video, X } from "lucide-react";
+import { Activity, BarChart3, Camera, CircleDot, LayoutDashboard, Menu, UserRoundSearch, Video, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { getData } from "../../lib/api";
@@ -9,6 +9,7 @@ const navigation = [
   { to: "/live", label: "Live Monitoring", icon: Video },
   { to: "/cameras", label: "Cameras", icon: Camera },
   { to: "/detections", label: "Detections", icon: CircleDot },
+  { to: "/person-labeling", label: "Person Labeling", icon: UserRoundSearch },
   { to: "/statistics", label: "Statistics", icon: BarChart3 },
 ];
 

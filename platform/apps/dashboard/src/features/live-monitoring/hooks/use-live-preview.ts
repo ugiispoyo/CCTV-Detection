@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 
 export type LivePreviewStatus = "connecting" | "live" | "reconnecting" | "offline" | "error";
 export interface VisibleObjectCounts { person: number; car: number; motorcycle: number }
+export interface VisibleTrack { trackId: number; objectType: "person" | "car" | "motorcycle"; bbox: [number, number, number, number] }
 const EMPTY_COUNTS: VisibleObjectCounts = { person: 0, car: 0, motorcycle: 0 };
 
 interface PreviewMetadata {
@@ -23,12 +24,14 @@ export function useLivePreview(cameraId: string | undefined, enabled: boolean): 
   fps: number;
   lastFrameAt: Date | null;
   visibleCounts: VisibleObjectCounts;
+  visibleTracks: VisibleTrack[];
 } {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState<LivePreviewStatus>(enabled ? "connecting" : "offline");
   const [fps, setFps] = useState(0);
   const [lastFrameAt, setLastFrameAt] = useState<Date | null>(null);
   const [visibleCounts, setVisibleCounts] = useState<VisibleObjectCounts>(EMPTY_COUNTS);
+  const [visibleTracks, setVisibleTracks] = useState<VisibleTrack[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,6 +39,7 @@ export function useLivePreview(cameraId: string | undefined, enabled: boolean): 
     setFps(0);
     setLastFrameAt(null);
     setVisibleCounts(EMPTY_COUNTS);
+    setVisibleTracks([]);
     if (!cameraId || !enabled) {
       setStatus("offline");
       return;
@@ -105,15 +109,17 @@ export function useLivePreview(cameraId: string | undefined, enabled: boolean): 
           return;
         }
         try {
-          const message = JSON.parse(String(event.data)) as { type?: string; staleSeconds?: number; cameraId?: string; counts?: VisibleObjectCounts };
+          const message = JSON.parse(String(event.data)) as { type?: string; staleSeconds?: number; cameraId?: string; counts?: VisibleObjectCounts; tracks?: VisibleTrack[] };
           if (typeof message.staleSeconds === "number") staleMs = message.staleSeconds * 1_000;
           if (message.type === "preview.objects" && message.cameraId === cameraId && message.counts) {
             const next = message.counts;
             setVisibleCounts((current) => current.person === next.person && current.car === next.car && current.motorcycle === next.motorcycle ? current : next);
+            setVisibleTracks(message.tracks ?? []);
           }
           if (message.type === "camera.preview.stopped") {
             setStatus("offline");
             setVisibleCounts(EMPTY_COUNTS);
+            setVisibleTracks([]);
           }
         } catch { /* Ignore unknown control messages. */ }
       };
@@ -130,6 +136,7 @@ export function useLivePreview(cameraId: string | undefined, enabled: boolean): 
       if (lastReceived && Date.now() - lastReceived > staleMs) {
         setStatus("offline");
         setVisibleCounts(EMPTY_COUNTS);
+        setVisibleTracks([]);
       }
     }, 1_000);
     connect();
@@ -143,6 +150,6 @@ export function useLivePreview(cameraId: string | undefined, enabled: boolean): 
     };
   }, [cameraId, enabled]);
 
-  return { canvasRef, status, fps, lastFrameAt, visibleCounts };
+  return { canvasRef, status, fps, lastFrameAt, visibleCounts, visibleTracks };
 }
 

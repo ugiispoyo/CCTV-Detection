@@ -1,0 +1,20 @@
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import { errorResponseSchema, ok } from "../../lib/schemas.js";
+import { createCredentialSchema, createPersonSchema, credentialCreatedResponseSchema, credentialParamsSchema, credentialVerificationResponseSchema, peopleListQuerySchema, peopleListResponseSchema, personParamsSchema, personResponseSchema, updatePersonSchema, verifyCredentialSchema } from "./person.schema.js";
+import { createCredential, createPerson, getPerson, listPeople, revokeCredential, updatePerson, verifyCredential } from "./person.service.js";
+import { listActiveIdentities } from "./active-identity.service.js";
+import { requireOperator } from "../../plugins/operator-auth.js";
+import { z } from "zod";
+const errors = { 400: errorResponseSchema, 401: errorResponseSchema, 404: errorResponseSchema, 409: errorResponseSchema, 429: errorResponseSchema, 503: errorResponseSchema };
+const security = [{ operatorAuth: [] }];
+export const peopleRoutes: FastifyPluginAsyncZod = async (app) => {
+  app.addHook("onRequest", requireOperator);
+  app.get("/api/active-identities", { schema: { tags: ["Registered People"], summary: "List short-lived verified active-track associations", security: [{ operatorAuth: [] }], querystring: z.object({ cameraId: z.string().optional() }) } }, async (request) => ok(listActiveIdentities(request.query.cameraId)));
+  app.get("/api/people", { schema: { tags: ["Registered People"], security, summary: "List registered people", querystring: peopleListQuerySchema, response: { 200: peopleListResponseSchema, ...errors } } }, async (request) => ok(await listPeople(request.query)));
+  app.post("/api/people", { schema: { tags: ["Registered People"], security, summary: "Idempotently register a person using normalized identity details", body: createPersonSchema, response: { 201: personResponseSchema, ...errors } } }, async (request, reply) => reply.code(201).send(ok(await createPerson(request.body))));
+  app.get("/api/people/:personId", { schema: { tags: ["Registered People"], security, summary: "Get a registered person", params: personParamsSchema, response: { 200: personResponseSchema, ...errors } } }, async (request) => ok(await getPerson(request.params.personId)));
+  app.patch("/api/people/:personId", { schema: { tags: ["Registered People"], security, summary: "Update, deactivate, or anonymize a person", params: personParamsSchema, body: updatePersonSchema, response: { 200: personResponseSchema, ...errors } } }, async (request) => ok(await updatePerson(request.params.personId, request.body)));
+  app.post("/api/people/:personId/credentials", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } }, schema: { tags: ["Registered People"], security, summary: "Generate a one-time high-entropy credential", params: personParamsSchema, body: createCredentialSchema, response: { 201: credentialCreatedResponseSchema, ...errors } } }, async (request, reply) => reply.code(201).send(ok(await createCredential(request.params.personId))));
+  app.delete("/api/people/:personId/credentials/:credentialId", { schema: { tags: ["Registered People"], security, summary: "Revoke a credential", params: credentialParamsSchema, response: { 200: personResponseSchema, ...errors } } }, async (request) => ok(await revokeCredential(request.params.personId, request.params.credentialId)));
+  app.post("/api/people/verify-credential", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } }, schema: { tags: ["Registered People"], security, summary: "Verify a registered access credential", body: verifyCredentialSchema, response: { 200: credentialVerificationResponseSchema, ...errors } } }, async (request) => ok(await verifyCredential(request.body.credential)));
+};
