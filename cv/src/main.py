@@ -10,6 +10,10 @@ from pydantic import ValidationError
 
 from src.camera.configuration import CameraRuntimeConfig, load_camera_configs
 from src.camera.manager import CameraManager, CameraRuntime
+from src.camera.person_capture_control import (
+    PersonCaptureRecordingControl,
+    PersonCaptureRecordingControlService,
+)
 from src.camera.rtsp import RTSPCapture
 from src.camera.worker import CameraWorker
 from src.clients.api_client import APIAuthenticationError, APIClient, CameraConfigurationError
@@ -102,6 +106,7 @@ def run() -> int:
         selected_device = "unknown"
         head_detector: HeadDetector | None = None
         for camera in camera_configs:
+            api_config: dict[str, object] = {"personCaptureRecordingEnabled": True}
             try:
                 api_config = api.get_camera_config(camera.camera_id)
                 if api_config.get("countingLine") is None:
@@ -123,6 +128,14 @@ def run() -> int:
                 )
 
             custom_classes = {0: "person", 1: "head", 2: "motorcycle"}
+            capture_recording_control = PersonCaptureRecordingControl(
+                bool(api_config.get("personCaptureRecordingEnabled", True))
+            )
+            LOGGER.info(
+                "Person capture recording initial state camera_id=%s enabled=%s",
+                camera.camera_id,
+                capture_recording_control.is_enabled(),
+            )
             if settings.EXPERIMENTAL_HYBRID_DETECTOR_ENABLED:
                 custom_path = settings.custom_detector_model_path
                 if custom_path is None:
@@ -222,6 +235,7 @@ def run() -> int:
                     settings.HEAD_CROP_PADDING, settings.HEAD_CROP_MIN_WIDTH,
                     settings.HEAD_CROP_MIN_HEIGHT,
                 ) if settings.PERSON_CAPTURE_ENABLED else None,
+                capture_recording_control,
                 stop_event,
             )
             heartbeat = HeartbeatService(
@@ -230,6 +244,13 @@ def run() -> int:
                 camera.camera_id,
                 capture.is_connected,
                 settings.HEARTBEAT_INTERVAL_SECONDS,
+                stop_event,
+            )
+            capture_recording_control_service = PersonCaptureRecordingControlService(
+                api,
+                camera.camera_id,
+                capture_recording_control,
+                settings.PERSON_CAPTURE_CONTROL_POLL_SECONDS,
                 stop_event,
             )
             worker_thread = threading.Thread(
@@ -242,6 +263,7 @@ def run() -> int:
                 capture,
                 worker,
                 heartbeat,
+                capture_recording_control_service,
                 preview_publisher,
                 worker_thread,
             ))

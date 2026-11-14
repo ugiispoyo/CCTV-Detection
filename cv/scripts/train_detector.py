@@ -73,9 +73,12 @@ def main() -> None:
         patience=args.patience, workers=args.workers, seed=args.seed, deterministic=True,
         device=args.device, project=str(project), name=args.version, exist_ok=False,
     )
+    results_csv = Path(result.save_dir) / "results.csv"
+    completed_epochs = max(0, len(results_csv.read_text(encoding="utf-8").splitlines()) - 1)
     summary = {"version": args.version, "dataset": str(args.dataset.resolve()), "baseModel": str(args.base_model.resolve()),
                "classMapping": {name: index for index, name in expected_names.items()},
-               "epochs": args.epochs, "imgsz": args.imgsz, "batch": args.batch, "patience": args.patience,
+               "epochs": args.epochs, "completedEpochs": completed_epochs,
+               "imgsz": args.imgsz, "batch": args.batch, "patience": args.patience,
                "workers": args.workers, "seed": args.seed, "deterministic": True,
                "device": args.device, "output": str(result.save_dir)}
     (Path(result.save_dir) / "training-metadata.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

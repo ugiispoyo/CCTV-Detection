@@ -13,5 +13,6 @@ data/ultralytics/
 data/snapshots/
 data/datasets/
 data/training-runs/
+data/full-frame-assets/
 *.log
 .DS_Store

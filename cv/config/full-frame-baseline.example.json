@@ -1,0 +1,28 @@
+{
+  "classMapping": {
+    "person": 0,
+    "head": 1,
+    "car": 2,
+    "motorcycle": 3
+  },
+  "items": [
+    {
+      "image": "incoming/lens-1-day-empty-001.jpg",
+      "label": "incoming/lens-1-day-empty-001.txt",
+      "lens": "lens-1",
+      "lighting": "day",
+      "scene": "empty",
+      "usage": "regression",
+      "group": "lens-1-day-session-001"
+    },
+    {
+      "image": "incoming/lens-2-night-person-001.jpg",
+      "label": "incoming/lens-2-night-person-001.txt",
+      "lens": "lens-2",
+      "lighting": "night",
+      "scene": "person",
+      "usage": "train",
+      "group": "lens-2-night-session-001"
+    }
+  ]
+}

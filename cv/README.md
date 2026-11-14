@@ -91,8 +91,23 @@ Live preview reuses the processed frame and existing tracks/counter state. It pu
 
 When `PERSON_CAPTURE_ENABLED=true`, the worker reuses tracked person boxes—without duplicate person inference—to rank a time-bounded set of candidates. It finalizes only after the existing line counter emits a valid person crossing. Each crossing has an idempotent `crossingId`, so jitter cannot duplicate one event while a legitimate return by the same active track creates a separate directional capture. The Phase 5 default `PERSON_CAPTURE_DIRECTION=both` creates review crops for both IN and OUT. It writes an atomic full-body JPEG plus an optional detector-produced head JPEG under `data/snapshots/`. See [person capture](docs/person-capture.md), [head detector contract](docs/head-detector.md), and [dataset/training](docs/dataset-training.md).
 
+The per-camera Person Capture Recording switch can pause new full-body/head
+files without pausing inference, bounding boxes, line-crossing counting, event
+delivery, or statistics.
+
 For the complete operator procedure from Dashboard annotation through dataset
 export, Apple MPS training, hybrid Live Monitoring activation, verification, and
 rollback, see [manual training and Live Monitoring deployment](docs/manual-training-live-monitoring.md).
+The reproducible v297 custom-model, frozen full-frame regression set, and
+legacy-plus-custom acceptance workflow are documented in
+[hybrid detector baseline](docs/hybrid-detector-baseline.md).
+For the complete current procedure to label full frames, merge them with the
+latest crop export, train a three-class custom detector, evaluate a frozen
+regression set, and deploy it beside the legacy car model, see
+[full-frame + crop hybrid training](docs/full-frame-crop-hybrid-training.md).
+For the repository's current v357/v358 state, including separate crop-only,
+crop-plus-full-frame, optional continued fine-tuning, and two-model runtime
+hybrid procedures, see
+[current v358 and hybrid training guide](docs/current-training-v358-and-hybrid.md).
 
 Files are removed from the worker only after Fastify acknowledges delivery. Invalid uploads remain visible in the SQLite queue for diagnosis and are not silently discarded. Orphan cleanup never deletes files referenced by the queue. This is a review workflow only: there is no face recognition, biometric matching, or cross-session identity inference. See [person capture](docs/person-capture.md).

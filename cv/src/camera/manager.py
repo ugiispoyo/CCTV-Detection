@@ -5,6 +5,7 @@ import threading
 from dataclasses import dataclass
 
 from src.camera.rtsp import RTSPCapture
+from src.camera.person_capture_control import PersonCaptureRecordingControlService
 from src.camera.worker import CameraWorker
 from src.monitoring.heartbeat import HeartbeatService
 from src.preview.publisher import PreviewPublisher
@@ -18,6 +19,7 @@ class CameraRuntime:
     capture: RTSPCapture
     worker: CameraWorker
     heartbeat: HeartbeatService
+    capture_recording_control: PersonCaptureRecordingControlService
     preview_publisher: PreviewPublisher | None
     worker_thread: threading.Thread
 
@@ -34,6 +36,7 @@ class CameraManager:
         for runtime in self._runtimes:
             runtime.capture.start()
             runtime.heartbeat.start()
+            runtime.capture_recording_control.start()
             if runtime.preview_publisher is not None:
                 runtime.preview_publisher.start()
             runtime.worker_thread.start()
@@ -54,6 +57,7 @@ class CameraManager:
             runtime.worker_thread.join(timeout=15)
             runtime.capture.join()
             runtime.heartbeat.join()
+            runtime.capture_recording_control.join()
             if runtime.preview_publisher is not None:
                 runtime.preview_publisher.join()
             LOGGER.info("Logical camera runtime stopped camera_id=%s", runtime.camera_id)

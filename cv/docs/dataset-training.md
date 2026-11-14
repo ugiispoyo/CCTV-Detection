@@ -108,3 +108,25 @@ Rollback does not remove the candidate. Set the following and restart CV:
 ```dotenv
 EXPERIMENTAL_HYBRID_DETECTOR_ENABLED=false
 ```
+
+## v297 hybrid baseline (2026-11-14)
+
+Export v297 has been trained as the versioned custom candidate
+`detector-v297-phm-hybrid-v1`. It is intended to supply person, head, and
+motorcycle while `yolo26n.pt` remains the car source. The candidate has not been
+automatically activated: its crop validation improved some localization metrics
+but reduced overall and motorcycle recall relative to v287.
+
+The exact dataset preparation, completed metrics, full-frame regression
+guardrail, future full-frame training merge, activation, and rollback commands
+are recorded in [hybrid detector baseline](hybrid-detector-baseline.md).
+
+The end-to-end step-by-step guide using the current `v298` crop export, reviewed
+full-frame annotations, merged training, frozen regression, hybrid activation,
+and rollback is available in
+[full-frame + crop hybrid training](full-frame-crop-hybrid-training.md).
+
+The updated operator guide for the current v357/v358 exports, the prepared 137
+full-frame dataset, a new v358 merge, optional continued fine-tuning, runtime
+hybrid activation, and the current lack of an independent regression split is
+available in [current v358 and hybrid training guide](current-training-v358-and-hybrid.md).

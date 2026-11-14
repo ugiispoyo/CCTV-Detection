@@ -47,6 +47,7 @@ Configuration is loaded from `cv/.env` based on the source location, not the she
 | `EVENT_RETRY_MAX_SECONDS` | Backoff and authentication-pause ceiling |
 | `HEARTBEAT_INTERVAL_SECONDS` | Camera connectivity report cadence |
 | `METRICS_INTERVAL_SECONDS` | Performance log cadence |
+| `PERSON_CAPTURE_CONTROL_POLL_SECONDS` | Interval for applying the per-camera person-capture toggle while detection and counting continue |
 | `EVENT_QUEUE_DATABASE` | SQLite path relative to `cv/` unless absolute |
 | `EVENT_QUEUE_MAX_PENDING` | Pending count that pauses inference; events are not silently dropped |
 | `EVENT_QUEUE_RETAIN_DELIVERED` | Keep delivered audit rows instead of deleting them |

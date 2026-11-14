@@ -7,11 +7,29 @@ import shutil
 from pathlib import Path
 
 
+IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png")
+
+
+def find_image(root: Path, split: str, stem: str) -> Path:
+    matches = [root / "images" / split / f"{stem}{suffix}" for suffix in IMAGE_SUFFIXES]
+    existing = [path for path in matches if path.is_file()]
+    if len(existing) != 1:
+        raise SystemExit(
+            f"Expected exactly one image for labels/{split}/{stem}.txt; found {existing}"
+        )
+    return existing[0]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--classes", nargs="+", required=True)
+    parser.add_argument(
+        "--keep-empty",
+        action="store_true",
+        help="Keep images whose remapped label is empty (background negatives).",
+    )
     args = parser.parse_args()
 
     source = args.source.resolve()
@@ -38,6 +56,7 @@ def main() -> None:
     }
     image_count = 0
     annotation_count = 0
+    negative_image_count = 0
     split_counts: dict[str, dict[str, int]] = {}
     for split in ("train", "val"):
         image_output = output / "images" / split
@@ -57,19 +76,20 @@ def main() -> None:
                 source_id = int(parts[0])
                 if source_id in source_to_target:
                     selected.append(" ".join([str(source_to_target[source_id]), *parts[1:]]))
-            if not selected:
+            if not selected and not args.keep_empty:
                 continue
-            image_path = source / "images" / split / f"{label_path.stem}.jpg"
-            if not image_path.is_file():
-                raise SystemExit(f"Image missing for {label_path}")
+            image_path = find_image(source, split, label_path.stem)
             copied_image = image_output / image_path.name
             shutil.copy2(image_path, copied_image)
             copied_image.chmod(0o600)
             copied_label = label_output / label_path.name
-            copied_label.write_text("\n".join(selected) + "\n", encoding="utf-8")
+            copied_label.write_text(
+                ("\n".join(selected) + "\n") if selected else "", encoding="utf-8"
+            )
             copied_label.chmod(0o600)
             split_images += 1
             split_annotations += len(selected)
+            negative_image_count += int(not selected)
         split_counts[split] = {"images": split_images, "annotations": split_annotations}
         image_count += split_images
         annotation_count += split_annotations
@@ -90,6 +110,8 @@ def main() -> None:
         "createdFor": "explicit administrator candidate training",
         "imageCount": image_count,
         "annotationCount": annotation_count,
+        "negativeImageCount": negative_image_count,
+        "keptEmptyLabels": args.keep_empty,
         "classMapping": class_mapping,
         "splitCounts": split_counts,
         "excludedClasses": sorted(set(source_mapping) - set(args.classes)),

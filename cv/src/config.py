@@ -68,6 +68,7 @@ class Settings(BaseSettings):
 
     HEARTBEAT_INTERVAL_SECONDS: float = Field(default=15, ge=5, le=3600)
     METRICS_INTERVAL_SECONDS: float = Field(default=30, ge=5, le=3600)
+    PERSON_CAPTURE_CONTROL_POLL_SECONDS: float = Field(default=2, ge=0.5, le=60)
 
     EVENT_QUEUE_DATABASE: str = "data/events.sqlite3"
     EVENT_QUEUE_MAX_PENDING: int = Field(default=10_000, ge=100, le=1_000_000)

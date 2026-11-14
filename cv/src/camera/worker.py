@@ -6,6 +6,7 @@ import time
 from collections import Counter
 
 from src.camera.rtsp import RTSPCapture
+from src.camera.person_capture_control import PersonCaptureRecordingControl
 from src.counting.counting_manager import CountingManager
 from src.monitoring.metrics import RuntimeMetrics
 from src.preview.encoder import JpegPreviewEncoder
@@ -32,6 +33,7 @@ class CameraWorker:
         preview_encoder: JpegPreviewEncoder | None,
         preview_publisher: PreviewPublisher | None,
         person_capture: PersonCaptureManager | None,
+        capture_recording_control: PersonCaptureRecordingControl,
         stop_event: threading.Event,
     ) -> None:
         self._camera_id = camera_id
@@ -47,6 +49,7 @@ class CameraWorker:
         self._preview_encoder = preview_encoder
         self._preview_publisher = preview_publisher
         self._person_capture = person_capture
+        self._capture_recording_control = capture_recording_control
         self._stop_event = stop_event
 
     def run(self) -> None:
@@ -59,7 +62,20 @@ class CameraWorker:
         preview_encoding_ms = 0.0
         preview_window_started = time.monotonic()
         last_encoding_warning = 0.0
+        capture_recording_enabled = self._capture_recording_control.is_enabled()
         while not self._stop_event.is_set():
+            current_capture_recording_enabled = self._capture_recording_control.is_enabled()
+            if current_capture_recording_enabled != capture_recording_enabled:
+                capture_recording_enabled = current_capture_recording_enabled
+                if self._person_capture is not None:
+                    self._person_capture.reset(self._tracker.session_id)
+                LOGGER.info(
+                    "Person capture recording applied camera_id=%s enabled=%s; "
+                    "counting and live inference remain active",
+                    self._camera_id,
+                    capture_recording_enabled,
+                )
+
             if self._queue.at_capacity():
                 LOGGER.critical(
                     "Event queue capacity reached camera_id=%s pending=%d; pausing inference until delivery recovers",
@@ -90,13 +106,15 @@ class CameraWorker:
             try:
                 tracks, latency_ms = self._tracker.track(latest.image)
                 events = self._counting.process(
-                    tracks, latest.image.shape, self._tracker.session_id
+                    tracks,
+                    latest.image.shape,
+                    self._tracker.session_id,
                 )
                 for event in events:
                     inserted = self._queue.enqueue(event)
                     if not inserted:
                         LOGGER.warning("Event already present in local queue event_id=%s", event.eventId)
-                if self._person_capture is not None:
+                if capture_recording_enabled and self._person_capture is not None:
                     self._person_capture.process(latest.image, tracks, self._tracker.session_id, events)
                 self._metrics.record_frame(latency_ms)
             except Exception:

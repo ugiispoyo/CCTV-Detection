@@ -25,3 +25,17 @@ The initial text message is `preview.register`; Fastify replies with `preview.re
 Before each binary frame, the worker sends a versioned `preview.objects` message with the same sequence number, tracker session ID, current tracked counts, and normalized track boxes. These values are ephemeral “visible now” telemetry used to confirm whether a manually verified track is still active. They contain no resident identity and are not persisted.
 
 This preview is intended for trusted local deployment at approximately 2–10 FPS. WebRTC or a dedicated streaming gateway is a better future choice for high frame rates, many cameras, or remote/public viewing.
+
+## Person capture recording toggle
+
+Each logical camera has a persistent `personCaptureRecordingEnabled` switch on
+the Live Monitoring page. Turning it off does not stop RTSP, YOLO, ByteTrack,
+bounding boxes, visible-now counts, line-crossing counting, SQLite event queue,
+statistics, or JPEG preview delivery. It only prevents new person full-body and
+head crops from being written to snapshot storage.
+
+The worker polls the non-secret camera configuration every
+`PERSON_CAPTURE_CONTROL_POLL_SECONDS` and applies changes without a restart.
+Existing snapshots created before the switch was turned off retain their normal
+delivery lifecycle. Re-enabling capture resets only the capture candidate state
+and resumes creating new person images; counting state is not reset.
